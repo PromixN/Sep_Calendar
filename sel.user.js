@@ -258,7 +258,36 @@ END:VTIMEZONE`;
                 var eventStartInDayTimeStamp = getIcsTimeStamp(eventStartInDay, false);
                 var eventEndInDayTimeStamp = getIcsTimeStamp(eventEndInDay, false);
 
-                var eventStr = `BEGIN:VEVENT
+                if (Array.isArray(vEvent.rule.interval)){
+                    vEvent.rule.interval.forEach(indiDay => {
+                        eventStartInDayTimeStamp=getIcsTimeStamp(indiDay,false).substring(0,8)+eventStartInDayTimeStamp.substring(8)
+                        eventEndInDayTimeStamp=getIcsTimeStamp(indiDay,false).substring(0,8)+eventEndInDayTimeStamp.substring(8)
+                        var eventStr = `BEGIN:VEVENT
+CREATED:${currentIcsTimeStampZ}
+DTSTAMP:${currentIcsTimeStampZ}
+SUMMARY:${vEvent.description}
+DESCRIPTION:
+LOCATION:${vEvent.location}
+TZID:Asia/Shanghai
+SEQUENCE:0
+UID:${uuidv4()}
+DATE:${indiDay}
+DTSTART;TZID=Asia/Shanghai:${eventStartInDayTimeStamp}
+DTEND;TZID=Asia/Shanghai:${eventEndInDayTimeStamp}
+X-APPLE-TRAVEL-ADVISORY-BEHAVIOR:AUTOMATIC
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:This is an event reminder
+TRIGGER:-P0DT0H15M0S
+X-WR-ALARMUID:${uuidv4()}
+UID:${uuidv4()}
+END:VALARM
+END:VEVENT`;
+                        eventsStr += eventStr + "\n\n";
+                    })
+                    
+                } else {
+                    var eventStr = `BEGIN:VEVENT
 CREATED:${currentIcsTimeStampZ}
 DTSTAMP:${currentIcsTimeStampZ}
 SUMMARY:${vEvent.description}
@@ -279,8 +308,11 @@ X-WR-ALARMUID:${uuidv4()}
 UID:${uuidv4()}
 END:VALARM
 END:VEVENT`;
+                        eventsStr += eventStr + "\n\n";
 
-                eventsStr += eventStr + "\n\n";
+                }
+                
+
             });
 
             var res = `${head}\n\n${eventsStr}\n\n${tail}\n`
@@ -325,9 +357,17 @@ END:VEVENT`;
             var interval = 1;
             // check if it is an 'every 2 week' events
             if (course.courseWeeks.length > 3) {
-                if (course.courseWeeks[1] == course.courseWeeks[0] + 2 &&
-                    course.courseWeeks[2] == course.courseWeeks[1] + 2) {
-                    interval = 2;
+                interval = course.courseWeeks[1]-course.courseWeeks[0]
+                for (let index = 1; index < course.courseWeeks.length; index++) {
+                    if (course.courseWeeks[index]-course.courseWeeks[index-1] != interval){
+                        interval = new Array();
+                        course.courseWeeks.forEach(indiWeek => {
+                            var serieDate = new Date(startWeekMondayUTC);
+                            serieDate.setDate(serieDate.getDate() + (indiWeek - 1) * 7 + chineseWeekDayToWeekDayNum.get(course.courseWeekday) - 1);
+                            interval.push(serieDate)
+                        })
+                        break
+                    }
                 }
             }
             var rule = new RecursiveRule("WEEKLY", seriesUntil, interval, weekday);
@@ -341,9 +381,8 @@ END:VEVENT`;
     // console.log(tbody);
     var courseURL = tbodySel(tbody);
     var allCourseInfo = getCourseInfo(courseURL);
-    // console.log(courseInfo);
 
-    var startWeekMondayInputHTML = `<div><input type="text" id="startWeekStr" value="2021-08-30">  请按照样例的 YYYY-MM-DD 格式输入本学期第一周周一的日期</div>`;
+    var startWeekMondayInputHTML = `<div><input type="text" id="startWeekStr" value="2022-08-22">  请按照样例的 YYYY-MM-DD 格式输入本学期第一周周一的日期</div>`;
     var undergraduateCheckboxHTML = `<input type="checkbox" id="undergraduateButton" name="roleBox">`;
     var masterOrPhdCheckboxHTML = `<input type="checkbox" id=\"masterOrPhdButton" name="roleBox">`;
     var checkboxHTML = `<div> ${undergraduateCheckboxHTML} 我是玉泉路本科生 </div> <div> ${masterOrPhdCheckboxHTML} 我是雁栖湖硕士生/博士生 </div>`;
@@ -375,7 +414,14 @@ END:VEVENT`;
         var isUndergraduate = $("#undergraduateButton").is(":checked");
         var isMasterOrPhd = $("#masterOrPhdButton").is(":checked");
         if (isUndergraduate || isMasterOrPhd) {
-            var startWeekMondayUTC = new Date($("#startWeekStr").val());
+            var dayInput = $("#startWeekStr").val()
+            var re = /\d{4}\-\d{1,2}\-\d{1,2}$/;
+            if (! re.test(dayInput))
+            {
+                alert(" 请输入符合YYYY-MM-DD格式的首周日期！")
+                dayInput = "2022-08-22"
+            }
+            var startWeekMondayUTC = new Date(dayInput);
             var calendar = genIcsFromInfo(allCourseInfo, startWeekMondayUTC);
             var name = $("#page-title > span").text().substr(0, 9);
             var calendarStr = calendar.toIcsString(name);
